@@ -10,14 +10,17 @@
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
+#include "config.h"
 #include "wm.h"
 
 /* Global display state. */
 Display *display;
 Window root;
 float camera_yaw = 0.0f;
+float target_yaw = 0.0f;
 float camera_pitch = 0.0f;
-float radius = 250.0f;
+float target_pitch = 0.0f;
+float radius = ORBIT_RADIUS;
 
 ManagedWindow managed_windows[100];
 int window_count = 0;
@@ -45,8 +48,7 @@ static volatile int x_error_occurred = 0;
 static int x_error_handler(Display *display_arg, XErrorEvent *error_event) {
     char buffer[256];
     XGetErrorText(display_arg, error_event->error_code, buffer, sizeof(buffer));
-    fprintf(stderr, "[XError] request=%d error=%d (%s)
-",
+    fprintf(stderr, "[XError] request=%d error=%d (%s)\n",
             error_event->request_code,
             error_event->error_code,
             buffer);
@@ -55,8 +57,7 @@ static int x_error_handler(Display *display_arg, XErrorEvent *error_event) {
 }
 
 static int x_io_error_handler(Display *display_arg) {
-    fprintf(stderr, "[XIOError] fatal I/O error on display %s
-", DisplayString(display_arg));
+    fprintf(stderr, "[XIOError] fatal I/O error on display %s\n", DisplayString(display_arg));
     siglongjmp(io_error_jmp, 1);
 }
 
@@ -114,20 +115,62 @@ void style_frame_window(Window frame) {
     XSetWindowBackground(display, frame, 0x222222);
 }
 
-void calculate_window_position(float angle, float r, int *out_x, int *out_y) {
+void calculate_window_position(float angle, float r, int *out_x, int *out_y, float *out_scale) {
     float absolute_angle = angle + camera_yaw;
+
+    /* Z-coordinate simulation: cosf gives depth on the orbit */
+    float z = cosf(absolute_angle);
+    /* Scale windows based on depth: 1.0 at front, 0.5 at back */
+    float scale = 0.75f + (z * 0.25f);
+
     float radius_factor = 1.0f + (camera_pitch * 0.1f);
     float effective_radius = r * radius_factor;
 
+    /* Use sinf for horizontal position on screen */
     int x = screen_center_x + (int)(effective_radius * sinf(absolute_angle)) - 200;
-    int y = screen_center_y + (int)(effective_radius * cosf(absolute_angle)) - 150;
+    /* Adjust Y based on pitch and depth for pseudo-3D */
+    int y = screen_center_y + (int)(z * effective_radius * 0.3f) - 150;
 
     *out_x = x;
     *out_y = y;
+    *out_scale = scale;
+}
+
+
+
+void focus_next(void) {
+    if (window_count <= 1) return;
+    /* Find currently focused */
+    Window focused;
+    int revert_to;
+    XGetInputFocus(display, &focused, &revert_to);
+
+    int current_idx = -1;
+    for (int i = 0; i < window_count; i++) {
+        if (managed_windows[i].client == focused || managed_windows[i].frame == focused) {
+            current_idx = i;
+            break;
+        }
+    }
+
+    int next_idx = (current_idx + 1) % window_count;
+    XSetInputFocus(display, managed_windows[next_idx].client, RevertToPointerRoot, CurrentTime);
+    XRaiseWindow(display, managed_windows[next_idx].frame);
+    sync_display();
+}
+
+void redistribute_windows(void) {
+    if (window_count == 0) return;
+    for (int i = 0; i < window_count; i++) {
+        managed_windows[i].target_angle = (2.0f * M_PI * i) / (float)window_count;
+    }
 }
 
 void update_orbit_positions(void) {
     for (int i = 0; i < window_count; i++) {
+        /* Smoothly move windows to their target angles */
+        managed_windows[i].angle += (managed_windows[i].target_angle - managed_windows[i].angle) * INTERPOLATION_FACTOR;
+
         if (managed_windows[i].dragging) {
             continue;
         }
@@ -136,10 +179,19 @@ void update_orbit_positions(void) {
             continue;
         }
 
-        int x;
-        int y;
-        calculate_window_position(managed_windows[i].angle, radius, &x, &y);
-        XMoveWindow(display, managed_windows[i].frame, x, y);
+        int x_pos, y_pos;
+        float current_scale;
+        calculate_window_position(managed_windows[i].angle, radius, &x_pos, &y_pos, &current_scale);
+
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(display, managed_windows[i].client, &attrs)) {
+            int target_w = (int)((float)attrs.width * current_scale);
+            int target_h = (int)((float)attrs.height * current_scale);
+            if (target_w > 0 && target_h > 0) {
+                XMoveResizeWindow(display, managed_windows[i].frame, x_pos, y_pos, target_w, target_h);
+                XResizeWindow(display, managed_windows[i].client, target_w, target_h);
+            }
+        }
     }
 
     sync_display();
@@ -168,18 +220,16 @@ void on_window_map_request(XMapRequestEvent *ev) {
 
     XWindowAttributes attrs;
     if (!XGetWindowAttributes(display, ev->window, &attrs)) {
-        fprintf(stderr, "[MapRequest] XGetWindowAttributes failed for %lu
-", ev->window);
+        fprintf(stderr, "[MapRequest] XGetWindowAttributes failed for %lu\n", ev->window);
         sync_display();
         return;
     }
 
     Window frame = XCreateSimpleWindow(display, root, 0, 0,
                                       attrs.width, attrs.height, 2,
-                                      0x0000FF, 0x222222);
+                                      FRAME_COLOR, FRAME_BG);
     if (frame == 0) {
-        fprintf(stderr, "[MapRequest] Failed to create frame window
-");
+        fprintf(stderr, "[MapRequest] Failed to create frame window\n");
         sync_display();
         return;
     }
@@ -205,8 +255,7 @@ void on_window_map_request(XMapRequestEvent *ev) {
     }
 
     if (XReparentWindow(display, ev->window, frame, 0, 0) == 0) {
-        fprintf(stderr, "[MapRequest] XReparentWindow failed for %lu
-", ev->window);
+        fprintf(stderr, "[MapRequest] XReparentWindow failed for %lu\n", ev->window);
         XDestroyWindow(display, frame);
         sync_display();
         return;
@@ -240,6 +289,7 @@ void on_window_map_request(XMapRequestEvent *ev) {
         mgd->frame_y = 0;
 
         window_count++;
+        redistribute_windows();
         update_orbit_positions();
     }
 }
@@ -248,6 +298,7 @@ void on_window_unmap(XUnmapEvent *ev) {
     for (int i = 0; i < window_count; i++) {
         if (managed_windows[i].client == ev->window) {
             remove_managed_window(i);
+            redistribute_windows();
             update_orbit_positions();
             return;
         }
@@ -259,7 +310,18 @@ void on_button_press(XButtonEvent *ev) {
         return;
     }
 
-    int super_held = (ev->state & Mod4Mask) != 0;
+    int super_held = (ev->state & MOD_KEY) != 0;
+    if (super_held) {
+        if (ev->button == Button4) {
+            radius += 10.0f;
+            return;
+        } else if (ev->button == Button5) {
+            radius -= 10.0f;
+            if (radius < 50.0f) radius = 50.0f;
+            return;
+        }
+    }
+
 
     if (super_held) {
         ManagedWindow *mgd_win = NULL;
@@ -278,8 +340,7 @@ void on_button_press(XButtonEvent *ev) {
                                        GrabModeAsync, GrabModeAsync,
                                        None, None, CurrentTime);
         if (grab_status != GrabSuccess) {
-            fprintf(stderr, "[Input] XGrabPointer failed: %d
-", grab_status);
+            fprintf(stderr, "[Input] XGrabPointer failed: %d\n", grab_status);
             sync_display();
             return;
         }
@@ -313,8 +374,7 @@ void on_button_press(XButtonEvent *ev) {
                                        GrabModeAsync, GrabModeAsync,
                                        None, None, CurrentTime);
         if (grab_status != GrabSuccess) {
-            fprintf(stderr, "[Input] XGrabPointer failed for orbit: %d
-", grab_status);
+            fprintf(stderr, "[Input] XGrabPointer failed for orbit: %d\n", grab_status);
             sync_display();
             input_state.is_orbiting = 0;
             set_cursor(root, XC_arrow);
@@ -328,8 +388,8 @@ void on_motion_notify(XMotionEvent *ev) {
     if (input_state.is_orbiting) {
         int dx = ev->x_root - input_state.orbit_start_x;
         int dy = ev->y_root - input_state.orbit_start_y;
-        camera_yaw = input_state.orbit_yaw_start - (float)dx * 0.01f;
-        camera_pitch = input_state.orbit_pitch_start + (float)dy * 0.01f;
+        target_yaw = input_state.orbit_yaw_start - (float)dx * CAMERA_SPEED;
+        target_pitch = input_state.orbit_pitch_start + (float)dy * CAMERA_SPEED;
         if (camera_pitch > M_PI / 2.0f) {
             camera_pitch = M_PI / 2.0f;
         }
@@ -384,16 +444,23 @@ void on_button_release(XButtonEvent *ev) {
     if (input_state.is_orbiting) {
         input_state.is_orbiting = 0;
     }
+
     if (input_state.is_dragging_window) {
         for (int i = 0; i < window_count; i++) {
             if (managed_windows[i].frame == input_state.dragged_window) {
                 managed_windows[i].dragging = 0;
+                /* Update angle based on new position */
+                int dx = managed_windows[i].frame_x + 200 - screen_center_x;
+                int dy = managed_windows[i].frame_y + 150 - screen_center_y;
+                managed_windows[i].angle = atan2f((float)dx, (float)dy) - camera_yaw;
+                managed_windows[i].target_angle = managed_windows[i].angle;
                 break;
             }
         }
         input_state.is_dragging_window = 0;
         input_state.dragged_window = None;
     }
+
 
     XUngrabPointer(display, CurrentTime);
     set_cursor(root, XC_arrow);
@@ -404,8 +471,9 @@ void on_key_press(XKeyEvent *ev) {
     KeyCode key_q = XKeysymToKeycode(display, XK_q);
     KeyCode key_e = XKeysymToKeycode(display, XK_e);
     KeyCode key_r = XKeysymToKeycode(display, XK_r);
+    KeyCode key_tab = XKeysymToKeycode(display, XK_Tab);
 
-    if ((ev->state & Mod4Mask) == 0) {
+    if ((ev->state & MOD_KEY) == 0) {
         return;
     }
     if (ev->keycode == key_e) {
@@ -414,10 +482,26 @@ void on_key_press(XKeyEvent *ev) {
     } else if (ev->keycode == key_r) {
         for (int i = 0; i < window_count; i++) {
             managed_windows[i].dragging = 0;
-            managed_windows[i].angle = (2.0f * M_PI * i) / (float)window_count;
+            managed_windows[i].target_angle = (2.0f * M_PI * i) / (float)window_count;
         }
+    } else if (ev->keycode == key_tab) {
+        focus_next();
     } else if (ev->keycode == key_q) {
-        /* TODO: close focused window */
+        Window focused;
+        int revert_to;
+        XGetInputFocus(display, &focused, &revert_to);
+        if (focused != None && focused != root && window_is_managed(focused)) {
+            XEvent ev_close;
+            memset(&ev_close, 0, sizeof(ev_close));
+            ev_close.xclient.type = ClientMessage;
+            ev_close.xclient.window = focused;
+            ev_close.xclient.message_type = XInternAtom(display, "WM_PROTOCOLS", True);
+            ev_close.xclient.format = 32;
+            ev_close.xclient.data.l[0] = XInternAtom(display, "WM_DELETE_WINDOW", True);
+            ev_close.xclient.data.l[1] = CurrentTime;
+            XSendEvent(display, focused, False, NoEventMask, &ev_close);
+            sync_display();
+        }
     }
 }
 
@@ -453,10 +537,12 @@ void register_global_hotkeys(void) {
     KeyCode key_q = XKeysymToKeycode(display, XK_q);
     KeyCode key_e = XKeysymToKeycode(display, XK_e);
     KeyCode key_r = XKeysymToKeycode(display, XK_r);
+    KeyCode key_tab = XKeysymToKeycode(display, XK_Tab);
 
-    XGrabKey(display, key_q, Mod4Mask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(display, key_e, Mod4Mask, root, True, GrabModeAsync, GrabModeAsync);
-    XGrabKey(display, key_r, Mod4Mask, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, key_q, MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, key_e, MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, key_r, MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, key_tab, MOD_KEY, root, True, GrabModeAsync, GrabModeAsync);
     sync_display();
 }
 
@@ -495,15 +581,13 @@ int main(void) {
     XSetIOErrorHandler(x_io_error_handler);
 
     if (sigsetjmp(io_error_jmp, 1) != 0) {
-        fprintf(stderr, "[Fatal] Recovered from X I/O error. Exiting.
-");
+        fprintf(stderr, "[Fatal] Recovered from X I/O error. Exiting.\n");
         return 1;
     }
 
     display = XOpenDisplay(NULL);
     if (display == NULL) {
-        fprintf(stderr, "[Fatal] Cannot open X display
-");
+        fprintf(stderr, "[Fatal] Cannot open X display\n");
         return 1;
     }
 
@@ -520,8 +604,7 @@ int main(void) {
                  ButtonReleaseMask | PointerMotionMask);
     sync_display();
     if (x_error_occurred != 0) {
-        fprintf(stderr, "[Fatal] Failed to select input on root. Another WM may be running.
-");
+        fprintf(stderr, "[Fatal] Failed to select input on root. Another WM may be running.\n");
         XCloseDisplay(display);
         return 1;
     }
@@ -536,6 +619,11 @@ int main(void) {
 
     while (1) {
         process_pending_events();
+
+        /* Smooth camera movement */
+        camera_yaw += (target_yaw - camera_yaw) * INTERPOLATION_FACTOR;
+        camera_pitch += (target_pitch - camera_pitch) * INTERPOLATION_FACTOR;
+
         update_orbit_positions();
 
         struct timespec current_frame;

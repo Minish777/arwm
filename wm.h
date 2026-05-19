@@ -30,7 +30,7 @@ void on_key_press(XKeyEvent *ev);
 void query_and_manage_existing_windows();
 void register_global_hotkeys();
 void style_frame_window(Window frame);
-void calculate_window_position(float angle, float r, int *out_x, int *out_y);
+void calculate_window_position(float angle, float r, int *out_x, int *out_y, float *out_scale);
 void process_pending_events();
 void set_cursor(Window win, int cursor_shape);
 void clamp_window_position(int *x, int *y, int width, int height);
