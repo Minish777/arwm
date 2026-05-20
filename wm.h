@@ -13,14 +13,12 @@ typedef struct Node {
     Window win;
     int x, y, w, h;
     SplitType split;
+    int floating;
     struct Node *parent;
     struct Node *left;
     struct Node *right;
 
-    // Canvas Support
-    int canvas_fd;
     GC gc;
-    unsigned long canvas_color;
 } Node;
 
 void wm_run();
@@ -31,6 +29,8 @@ void wm_handle_key_press(XKeyEvent *e);
 void wm_handle_focus(Window w);
 void wm_reload_config();
 void spawn(const char *cmd);
-void spawn_canvas(const char *cmd);
+void wm_ipc_init();
+void wm_ipc_handle(int fd);
+void wm_cleanup();
 
 #endif
