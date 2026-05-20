@@ -16,6 +16,11 @@ typedef struct Node {
     struct Node *parent;
     struct Node *left;
     struct Node *right;
+
+    // Canvas Support
+    int canvas_fd;
+    GC gc;
+    unsigned long canvas_color;
 } Node;
 
 void wm_run();
@@ -23,6 +28,9 @@ void wm_handle_map_request(Window w);
 void wm_handle_unmap_notify(Window w);
 void wm_handle_destroy_notify(Window w);
 void wm_handle_key_press(XKeyEvent *e);
+void wm_handle_focus(Window w);
+void wm_reload_config();
 void spawn(const char *cmd);
+void spawn_canvas(const char *cmd);
 
 #endif
