@@ -38,6 +38,7 @@ static Node* create_node(Window w) {
     if (!n) return NULL;
     n->win = w;
     n->split = SPLIT_NONE;
+    n->floating = 0;
     if (w != None) n->gc = XCreateGC(dpy, w, 0, NULL);
     return n;
 }
@@ -126,6 +127,8 @@ static Node* find_insertion_point(Node *n) {
     return find_insertion_point(n->left);
 }
 
+/* ---------- HANDLERS ---------- */
+
 void wm_handle_focus(Window w) {
     if (w == None || w == root) return;
     if (!find_node_by_window(tree_root, w)) return;
@@ -194,6 +197,7 @@ void wm_handle_key_press(XKeyEvent *e) {
 }
 
 void spawn(const char *cmd) {
+    fprintf(stderr, "ARWM [Spawn]: %s\n", cmd);
     if (fork() == 0) {
         setsid();
         if (fork() == 0) { execl("/bin/sh", "sh", "-c", cmd, NULL); exit(1); }
@@ -232,11 +236,14 @@ static void autostart() {
 }
 
 void wm_run() {
+    fprintf(stderr, "ARWM [WM]: Initializing IPC and Autostart...\n");
     wm_ipc_init(); autostart();
     struct pollfd pfd[2]; pfd[0].fd = ConnectionNumber(dpy); pfd[0].events = POLLIN;
     pfd[1].fd = ipc_sock; pfd[1].events = POLLIN;
     XEvent ev;
-    while (1) {
+
+    fprintf(stderr, "ARWM [WM]: Entering main loop.\n");
+    for (;;) {
         while (XPending(dpy)) {
             XNextEvent(dpy, &ev);
             switch (ev.type) {
@@ -250,7 +257,8 @@ void wm_run() {
                         wm_handle_focus(ev.xbutton.subwindow);
                         XWindowAttributes wa; XGetWindowAttributes(dpy, ev.xbutton.subwindow, &wa);
                         mouse_start_x = ev.xbutton.x_root; mouse_start_y = ev.xbutton.y_root;
-                        win_start_x = wa.x; win_start_y = wa.y; win_start_w = wa.width; win_start_h = wa.height;
+                        win_start_x = wa.x; win_start_y = wa.y;
+                        win_start_w = wa.width; win_start_h = wa.height;
                     }
                     break;
                 case MotionNotify:
@@ -262,6 +270,8 @@ void wm_run() {
                     break;
             }
         }
-        if (poll(pfd, 2, 10) > 0) if (pfd[1].revents & POLLIN) wm_ipc_handle(ipc_sock);
+        if (poll(pfd, 2, 100) > 0) {
+            if (pfd[1].revents & POLLIN) wm_ipc_handle(ipc_sock);
+        }
     }
 }

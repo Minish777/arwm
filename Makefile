@@ -1,7 +1,11 @@
 CC = gcc
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -Wextra -O2 -g
 LIBS = -lX11
 PREFIX = /usr/local
+
+# Debug logging enabled by default in source,
+# but can be toggled here if using #ifdef DEBUG
+# CFLAGS += -DDEBUG
 
 SRC = main.c wm.c config.c
 OBJ = $(SRC:.c=.o)
@@ -18,7 +22,7 @@ $(TARGET): $(OBJ)
 install: $(TARGET)
 	install -Dm755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/xsessions
-	echo "[Desktop Entry]\nName=ARWM\nComment=Another Robust Window Manager\nExec=$(PREFIX)/bin/arwm\nType=Application" > $(DESTDIR)$(PREFIX)/share/xsessions/arwm.desktop
+	printf "[Desktop Entry]\nName=ARWM\nComment=Another Robust Window Manager\nExec=$(PREFIX)/bin/arwm\nType=Application" > $(DESTDIR)$(PREFIX)/share/xsessions/arwm.desktop
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
