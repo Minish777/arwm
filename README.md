@@ -1,4 +1,4 @@
-# ARWM (Another Robust Window Manager) — Canvas Edition
+# ARWM (Another Robust Window Manager) — Ultimate Edition
 
 [English](#english) | [Русский](#русский)
 
@@ -6,69 +6,109 @@
 
 ## English
 
-ARWM is a high-performance tiling window manager for X11 that introduces a revolutionary **Virtual Canvas** concept. It allows applications to draw directly to a virtual device `/dev/canvas`, while ARWM handles the composition and isolation using Linux Namespaces.
+ARWM is a highly optimized, production-ready tiling window manager for X11. It adheres to **EWMH/ICCCM** standards and provides a modern, "native-like" experience with mouse management, IPC control, and a robust BSP layout.
 
-### ✨ Revolutionary Features
-- **Virtual Canvas**: Apps write drawing commands to a POSIX file, ARWM renders them natively.
-- **Isolation**: Each app gets its own mount namespace, thinking it has full screen access.
-- **Zero-Copy Intent**: Optimized event loop using `poll()` for ultra-low latency.
-- **BSP Tiling**: Automatic window management in a balanced binary tree.
-- **Lightweight**: Pure C and Xlib, minimal resource footprint.
+### ✨ Master-Level Features
+- **EWMH Standards**: Full compatibility with Polybar, Tint2, and other system panels.
+- **Mouse Management**: Mod + Left Click to move, Mod + Right Click to resize windows.
+- **IPC Control**: Control ARWM via Unix Socket (`/tmp/arwm.sock`) using simple CLI commands.
+- **Floating/Tiling**: Toggle windows between tiled and floating mode with ease.
+- **Auto-Detection**: Recognizes dialog windows and opens them in floating mode automatically.
 
-### 🚀 Developer API: /dev/canvas
-To draw on the canvas, an app writes binary commands:
-1. **Clear**: `[0x00][color:4]`
-2. **Rectangle**: `[0x01][x:2][y:2][w:2][h:2][color:4]`
-3. **Point**: `[0x02][x:2][y:2][color:4]`
+### 🚀 Production Installation Guide
 
-### 🛠️ Production Installation
-
-#### Prerequisites
-- Xlib headers (`libx11-dev`, `libX11-devel`).
-- Linux Kernel with Namespace support (`CONFIG_NAMESPACES`).
-
-#### Build
+#### 1. Dependencies
 ```bash
+# Debian / Ubuntu / Kali / Mint:
+sudo apt update
+sudo apt install build-essential libx11-dev x11-utils dmenu feh picom
+# Arch Linux:
+sudo pacman -S base-devel libx11 xorg-utils dmenu feh picom
+# Fedora:
+sudo dnf groupinstall "Development Tools"
+sudo dnf install libX11-devel xset dmenu feh picom
+```
+
+#### 2. Build and Install
+```bash
+git clone https://github.com/yourusername/arwm.git
+cd arwm
 make
 sudo make install
 ```
+
+#### 3. Professional Setup
+ARWM installs a `.desktop` entry for login managers. To configure your session, create `~/.config/arwm/autostart.sh`:
+```bash
+#!/bin/sh
+# Composite manager for transparency/shadows
+picom &
+# Set wallpaper
+feh --bg-fill /path/to/wallpaper.jpg &
+# System bar
+polybar main &
+```
+`chmod +x ~/.config/arwm/autostart.sh`
+
+### ⌨️ Default Keybindings (Mod = Super/Win key)
+- **Mod + Enter**: Terminal (`alacritty` -> `xterm`)
+- **Mod + D**: dmenu_run
+- **Mod + B**: Firefox Browser
+- **Mod + F**: File Manager
+- **Mod + Tab**: Cycle Focus
+- **Mod + Space**: Toggle Floating/Tiled Mode
+- **Mod + H**: Vertical Split Prep
+- **Mod + V**: Horizontal Split Prep
+- **Mod + R**: Live Reload Config
+- **Mod + Q**: Quit ARWM
 
 ---
 
 ## Русский
 
-ARWM — это высокопроизводительный тайловый оконный менеджер для X11, внедряющий революционную концепцию **Виртуального Холста (Virtual Canvas)**. Он позволяет приложениям рисовать напрямую в виртуальное устройство `/dev/canvas`, в то время как ARWM берет на себя композицию и изоляцию с помощью Linux Namespaces.
+ARWM — это высокооптимизированный тайловый оконный менеджер для X11, готовый к промышленному использованию. Он полностью соответствует стандартам **EWMH/ICCCM** и предоставляет современный пользовательский опыт с управлением мышью, IPC-контролем и надежной структурой BSP.
 
-### ✨ Революционные особенности
-- **Виртуальный Холст**: Приложения записывают команды рисования в POSIX-файл, ARWM отрисовывает их нативно.
-- **Изоляция**: Каждое приложение получает свой namespace монтирования, считая, что оно имеет доступ ко всему экрану.
-- **Низкая задержка**: Оптимизированный цикл событий на базе `poll()` для мгновенного отклика.
-- **Тайлинг BSP**: Автоматическое управление окнами в сбалансированном бинарном дереве.
-- **Легковесность**: Чистый C и Xlib, минимальное потребление ресурсов.
+### ✨ Ключевые возможности
+- **Стандарты EWMH**: Полная совместимость с Polybar, Tint2 и другими системными панелями.
+- **Управление мышью**: Mod + ЛКМ для перемещения, Mod + ПКМ для изменения размера окон.
+- **Управление через IPC**: Управляйте ARWM через Unix-сокет (`/tmp/arwm.sock`) простыми командами.
+- **Тайлинг и плавающие окна**: Мгновенное переключение между режимами для любого окна.
+- **Авто-определение**: Автоматически открывает диалоговые окна в плавающем режиме.
 
-### 🚀 API для разработчиков: /dev/canvas
-Чтобы рисовать на холсте, приложение записывает бинарные команды:
-1. **Очистка**: `[0x00][color:4]`
-2. **Прямоугольник**: `[0x01][x:2][y:2][w:2][h:2][color:4]`
-3. **Точка**: `[0x02][x:2][y:2][color:4]`
+### 🚀 Руководство по установке
 
-### 🛠️ Руководство по установке
+#### 1. Установка зависимостей
+```bash
+# Debian / Ubuntu:
+sudo apt install build-essential libx11-dev x11-utils dmenu feh picom
+# Arch Linux:
+sudo pacman -S base-devel libx11 xorg-utils dmenu feh picom
+```
 
-#### Требования
-- Заголовочные файлы Xlib (`libx11-dev`, `libX11-devel`).
-- Ядро Linux с поддержкой Namespace (`CONFIG_NAMESPACES`).
-
-#### Сборка
+#### 2. Сборка и установка
 ```bash
 make
 sudo make install
 ```
 
-#### Запуск с изоляцией
-Для запуска приложения с доступом к виртуальному холсту ARWM использует `unshare`. Обычные приложения продолжают работать через стандартный протокол X11.
+#### 3. Профессиональная настройка
+ARWM устанавливает файл сессии для менеджеров входа. Создайте файл `~/.config/arwm/autostart.sh`:
+```bash
+#!/bin/sh
+picom &
+feh --bg-fill /путь/к/обоям.jpg &
+polybar main &
+```
+Не забудьте `chmod +x ~/.config/arwm/autostart.sh`.
 
-### ⌨️ Горячие клавиши (Mod = Super/Win)
+### ⌨️ Горячие клавиши (Mod = Клавиша Super/Win)
 - **Mod + Enter**: Открыть терминал
 - **Mod + D**: Запустить dmenu
+- **Mod + B**: Открыть браузер
+- **Mod + F**: Файловый менеджер
+- **Mod + Tab**: Переключить фокус
+- **Mod + Space**: Переключить режим (Плавающий/Тайловый)
+- **Mod + H**: Подготовить вертикальное разделение
+- **Mod + V**: Подготовить горизонтальное разделение
 - **Mod + R**: Перезагрузить конфиг
-- **Mod + Q**: Выйти из ARWM
+- **Mod + Q**: Выход из ARWM
