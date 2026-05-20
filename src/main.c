@@ -11,6 +11,7 @@ xcb_ewmh_connection_t ewmh;
 
 static void handle_signal(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
+        log_info("Received signal %d, exiting...", sig);
         arwm_cleanup();
         exit(0);
     }
@@ -24,7 +25,7 @@ int main(void) {
 
     log_info("ARWM started successfully.");
 
-    spawn("alacritty || xterm");
+    spawn(cfg.terminal);
     spawn("sh ~/.config/arwm/autostart.sh");
 
     int x11_fd = xcb_get_file_descriptor(conn);

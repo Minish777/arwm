@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "config.h"
 #include "util.h"
 
@@ -21,10 +22,22 @@ void config_load(void) {
     char path[256];
     const char *home = getenv("HOME");
     if (!home) return;
-    snprintf(path, sizeof(path), "%s/.config/arwm/config.conf", home);
+
+    char dir[256];
+    snprintf(dir, sizeof(dir), "%s/.config/arwm", home);
+    mkdir(dir, 0755);
+
+    snprintf(path, sizeof(path), "%s/config.conf", dir);
 
     FILE *f = fopen(path, "r");
-    if (!f) return;
+    if (!f) {
+        f = fopen(path, "w");
+        if (f) {
+            fprintf(f, "gap_inner 10\ngap_outer 10\nterminal alacritty\n");
+            fclose(f);
+        }
+        return;
+    }
 
     char line[256];
     while (fgets(line, sizeof(line), f)) {
@@ -38,5 +51,7 @@ void config_load(void) {
 }
 
 void config_reload(void) {
+    log_info("Reloading configuration...");
     config_load();
+    layout_apply();
 }

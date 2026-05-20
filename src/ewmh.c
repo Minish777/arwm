@@ -24,6 +24,10 @@ void ewmh_init(void) {
 void ewmh_update_client_list(void) {
     int count = 0;
     for (Client *c = clients; c; c = c->next) count++;
+    if (count == 0) {
+        xcb_ewmh_set_client_list(&ewmh, 0, 0, NULL);
+        return;
+    }
     xcb_window_t *wins = malloc(count * sizeof(xcb_window_t));
     int i = 0;
     for (Client *c = clients; c; c = c->next) wins[i++] = c->win;

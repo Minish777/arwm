@@ -31,6 +31,6 @@ uninstall:
 	sudo rm -f $(PREFIX)/bin/$(MSG_TARGET)
 
 clean:
-	rm -f src/*.o $(TARGET) $(MSG_TARGET)
+	rm -f src/*.o src/arwm-msg.o $(TARGET) $(MSG_TARGET)
 
 .PHONY: all clean install uninstall debug

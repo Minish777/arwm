@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 log() { echo -e "\033[0;32m[BOOTSTRAP]\033[0m $1"; }
 log "Detecting distribution..."
 if [ -f /etc/arch-release ]; then

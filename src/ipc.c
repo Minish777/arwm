@@ -14,11 +14,14 @@ void ipc_init(void) {
     char path[256];
     const char *home = getenv("HOME");
     if (!home) return;
-    snprintf(path, sizeof(path), "%s/.cache/arwm", home);
-    mkdir(path, 0755);
-    strncat(path, "/ipc.sock", sizeof(path) - strlen(path) - 1);
 
+    char dir[256];
+    snprintf(dir, sizeof(dir), "%s/.cache/arwm", home);
+    mkdir(dir, 0755);
+
+    snprintf(path, sizeof(path), "%s/ipc.sock", dir);
     unlink(path);
+
     sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock_fd == -1) return;
 
