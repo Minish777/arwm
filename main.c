@@ -12,16 +12,28 @@
 
 Display *dpy;
 Window root;
+int wm_detected = 0;
 
-// Atoms for EWMH
+/* Atoms for EWMH */
 Atom net_supported, net_client_list, net_active_window, net_wm_name, utf8_string;
 Atom net_wm_state, net_wm_state_fullscreen, net_wm_window_type, net_wm_window_type_dialog;
 Atom net_number_of_desktops, net_current_desktop;
 
+/* Robust Error Handling: detect existing WM or BadAccess during grabs */
+int xerror_init(Display *d, XErrorEvent *e) {
+    if (e->error_code == BadAccess) {
+        wm_detected = 1;
+    }
+    return 0;
+}
+
+/* Fault-Tolerant Error Handling: prints errors but does NOT exit */
 int xerror(Display *d, XErrorEvent *e) {
     if (e->error_code == BadWindow) return 0;
-    fprintf(stderr, "ARWM: X error: error_code=%d, request_code=%d, minor_code=%d\n",
-            e->error_code, e->request_code, e->minor_code);
+    char err_buf[256];
+    XGetErrorText(d, e->error_code, err_buf, sizeof(err_buf));
+    fprintf(stderr, "ARWM: X Error: %s (error_code=%d, request_code=%d, minor_code=%d)\n",
+            err_buf, e->error_code, e->request_code, e->minor_code);
     return 0;
 }
 
@@ -61,6 +73,9 @@ static void grab_keys() {
     XUngrabKey(dpy, AnyKey, AnyModifier, root);
     for (int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
         key = XKeysymToKeycode(dpy, keys[i]);
+        if (key == 0) continue;
+
+        /* Validation: Ensure request doesn't crash us */
         XGrabKey(dpy, key, modifiers, root, True, GrabModeAsync, GrabModeAsync);
     }
 }
@@ -75,32 +90,49 @@ void signal_handler(int sig) {
 }
 
 int main() {
+    /* Display Check */
     if (!(dpy = XOpenDisplay(NULL))) {
-        fprintf(stderr, "ARWM: Cannot open display\n");
+        fprintf(stderr, "ARWM: FATAL: Cannot open display\n");
         return 1;
     }
 
+    root = DefaultRootWindow(dpy);
+
+    /* 1. Robust Initialization Sequence: Claim root window first */
+    XSetErrorHandler(xerror_init);
+    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
+    XSync(dpy, False);
+
+    if (wm_detected) {
+        fprintf(stderr, "ARWM: FATAL: Another window manager is already running on this display.\n");
+        XCloseDisplay(dpy);
+        return 1;
+    }
+
+    /* 2. Switch to Fault-Tolerant Error Handling */
+    XSetErrorHandler(xerror);
+
+    /* 3. Global Signals */
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     signal(SIGCHLD, signal_handler);
 
-    XSetErrorHandler(xerror);
-    root = DefaultRootWindow(dpy);
-
+    /* 4. Configuration & EWMH */
     config_init();
     config_load();
     setup_ewmh();
+
+    /* 5. Validation: Grabs occur only after root is claimed */
     grab_keys();
 
-    // Grab mouse for moving/resizing
     XGrabButton(dpy, Button1, Mod4Mask, root, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
                 GrabModeAsync, GrabModeAsync, None, None);
     XGrabButton(dpy, Button3, Mod4Mask, root, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
                 GrabModeAsync, GrabModeAsync, None, None);
 
-    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
     XSync(dpy, False);
 
+    /* 6. Event Loop (inside wm_run uses XPending) */
     wm_run();
 
     wm_cleanup();
