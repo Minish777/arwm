@@ -42,9 +42,8 @@ static void apply_node_geometry(Node *n) {
         XMoveResizeWindow(dpy, n->win,
             n->x + cfg_gap,
             n->y + cfg_gap,
-            n->w - cfg_gap * 2 - bw * 2,
-            n->h - cfg_gap * 2 - bw * 2);
-        DBG("Applied geometry to 0x%lx: x=%d y=%d w=%d h=%d\n", n->win, n->x, n->y, n->w, n->h);
+            (n->w - cfg_gap * 2 - bw * 2 > 0) ? n->w - cfg_gap * 2 - bw * 2 : 1,
+            (n->h - cfg_gap * 2 - bw * 2 > 0) ? n->h - cfg_gap * 2 - bw * 2 : 1);
     }
     apply_node_geometry(n->left);
     apply_node_geometry(n->right);
@@ -71,6 +70,7 @@ static void refresh_tree() {
     int sh = DisplayHeight(dpy, DefaultScreen(dpy));
     update_tree_geometries(tree_root, 0, 0, sw, sh);
     apply_node_geometry(tree_root);
+    XSync(dpy, False);
 }
 
 static Node* find_node_by_window(Node *n, Window w) {
@@ -85,7 +85,6 @@ static void remove_window(Window w) {
     Node *n = find_node_by_window(tree_root, w);
     if (!n) return;
 
-    DBG("Removing window 0x%lx\n", w);
     if (focused_win == w) focused_win = None;
 
     Node *p = n->parent;
@@ -120,7 +119,10 @@ static Node* find_insertion_point(Node *n) {
 /* ---------- HANDLERS ---------- */
 
 void wm_handle_focus(Window w) {
-    if (w == focused_win || w == None || w == root) return;
+    if (w == None || w == root) return;
+
+    // Safety check: is it a window we manage?
+    if (!find_node_by_window(tree_root, w)) return;
 
     Window old_focused = focused_win;
     focused_win = w;
@@ -129,12 +131,15 @@ void wm_handle_focus(Window w) {
         XSetWindowBorder(dpy, old_focused, cfg_border_inactive);
     }
     XSetWindowBorder(dpy, focused_win, cfg_border_active);
+    XRaiseWindow(dpy, focused_win);
     XSetInputFocus(dpy, focused_win, RevertToPointerRoot, CurrentTime);
-    DBG("Focused window 0x%lx\n", focused_win);
 }
 
 void wm_handle_map_request(Window w) {
-    DBG("MapRequest for 0x%lx\n", w);
+    XWindowAttributes wa;
+    XGetWindowAttributes(dpy, w, &wa);
+    if (wa.override_redirect) return;
+
     XSelectInput(dpy, w, StructureNotifyMask | EnterWindowMask | FocusChangeMask);
     XMapWindow(dpy, w);
 
@@ -167,14 +172,12 @@ void wm_handle_destroy_notify(Window w) {
 }
 
 void wm_reload_config() {
-    DBG("Reloading configuration\n");
     config_load();
     refresh_tree();
 }
 
 void wm_handle_key_press(XKeyEvent *e) {
     KeySym keysym = XLookupKeysym(e, 0);
-    DBG("KeyPress: keysym=0x%lx\n", keysym);
     if (keysym == XK_Return) {
         spawn("alacritty");
     } else if (keysym == XK_d) {
@@ -183,20 +186,16 @@ void wm_handle_key_press(XKeyEvent *e) {
         spawn("firefox");
     } else if (keysym == XK_h) {
         next_split = SPLIT_VERTICAL;
-        DBG("Next split: VERTICAL\n");
     } else if (keysym == XK_v) {
         next_split = SPLIT_HORIZONTAL;
-        DBG("Next split: HORIZONTAL\n");
     } else if (keysym == XK_r) {
         wm_reload_config();
     } else if (keysym == XK_q) {
-        DBG("Quitting ARWM\n");
         exit(0);
     }
 }
 
 void spawn(const char *cmd) {
-    DBG("Spawning: %s\n", cmd);
     if (fork() == 0) {
         setsid();
         if (fork() == 0) {
@@ -214,7 +213,9 @@ void spawn(const char *cmd) {
 }
 
 void wm_run() {
-    spawn("alacritty");
+    // Optional: Start a panel or background here if you want
+    // spawn("feh --bg-fill /path/to/wallpaper.jpg");
+
     XEvent ev;
     while (1) {
         XNextEvent(dpy, &ev);
