@@ -23,6 +23,8 @@ void wm_handle_map_request(Window w);
 void wm_handle_unmap_notify(Window w);
 void wm_handle_destroy_notify(Window w);
 void wm_handle_key_press(XKeyEvent *e);
+void wm_handle_focus(Window w);
+void wm_reload_config();
 void spawn(const char *cmd);
 
 #endif

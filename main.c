@@ -27,7 +27,7 @@ static void set_wm_name() {
 static void grab_keys() {
     KeyCode key;
     unsigned int modifiers = Mod4Mask;
-    KeySym keys[] = { XK_Return, XK_d, XK_b, XK_q, XK_h, XK_v };
+    KeySym keys[] = { XK_Return, XK_d, XK_b, XK_q, XK_h, XK_v, XK_r };
 
     XUngrabKey(dpy, AnyKey, AnyModifier, root);
     for (int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
