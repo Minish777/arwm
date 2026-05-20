@@ -1,6 +1,5 @@
 [Desktop Entry]
 Name=ARWM
-Comment=Another Robust Window Manager
+Comment=A minimal Rust window manager
 Exec=arwm
 Type=Application
-DesktopNames=ARWM

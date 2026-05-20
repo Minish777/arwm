@@ -1,0 +1,6 @@
+terminal = "alacritty"
+launcher = "dmenu_run"
+gap = 10
+border_width = 2
+border_color_focus = 6401007
+border_color_normal = 4080722
