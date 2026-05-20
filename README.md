@@ -31,7 +31,7 @@ sudo dnf install libX11-devel xset dmenu feh picom
 
 #### 2. Build and Install
 ```bash
-git clone https://github.com/yourusername/arwm.git
+git clone https://github.com/Minish777/arwm.git
 cd arwm
 make
 sudo make install
